@@ -41,3 +41,20 @@ La app es totalmente estatica y se puede desplegar facilmente en:
 - Vercel
 - Netlify
 - GitHub Pages
+
+## GitHub Pages
+
+Este proyecto ya esta preparado para publicarse en GitHub Pages desde el repositorio:
+
+- `diballesteros/calculadora-jornada-laboral`
+
+Pasos:
+
+1. Haz commit y push de la rama `main`.
+2. En GitHub, abre `Settings > Pages`.
+3. En `Source`, selecciona `GitHub Actions`.
+4. El workflow publicara automaticamente la app cada vez que haya cambios en `main`.
+
+La URL esperada de publicacion sera:
+
+- `https://diballesteros.github.io/calculadora-jornada-laboral/`
