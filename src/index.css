@@ -1,0 +1,106 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
+
+:root {
+	--bg: #f5efe4;
+	--surface: #fffbf5;
+	--text: #5b5349;
+	--text-h: #1f1b16;
+	--border: rgba(70, 53, 31, 0.12);
+	--accent: #e36c2d;
+	--muted: #7a6f60;
+	--shadow: 0 18px 40px rgba(72, 46, 22, 0.14);
+	--sans: "Manrope", "Trebuchet MS", sans-serif;
+	--heading: "Fraunces", Georgia, serif;
+	font: 16px/1.5 var(--sans);
+	color: var(--text);
+	background:
+		radial-gradient(
+			circle at top,
+			rgba(255, 203, 139, 0.45),
+			transparent 30%
+		),
+		linear-gradient(180deg, #f8f1e4 0%, #f2e8d7 100%);
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+body::before,
+body::after {
+	content: "";
+	position: fixed;
+	inset: auto;
+	border-radius: 999px;
+	pointer-events: none;
+	z-index: -1;
+}
+
+body::before {
+	top: -3rem;
+	right: -2rem;
+	width: 10rem;
+	height: 10rem;
+	background: rgba(227, 108, 45, 0.1);
+}
+
+body::after {
+	bottom: 10%;
+	left: -3rem;
+	width: 11rem;
+	height: 11rem;
+	background: rgba(29, 79, 114, 0.08);
+}
+
+#root {
+	width: min(100%, 72rem);
+	margin: 0 auto;
+	padding: 1rem;
+	min-height: 100vh;
+}
+
+h1,
+h2 {
+	font-family: var(--heading);
+	line-height: 1;
+	letter-spacing: -0.03em;
+}
+
+h1 {
+	font-size: clamp(2.4rem, 9vw, 4.8rem);
+}
+
+h2 {
+	margin: 0;
+	font-size: clamp(1.35rem, 4vw, 1.9rem);
+	color: var(--text-h);
+}
+
+p {
+	margin: 0;
+}
+
+input,
+button,
+table {
+	font: inherit;
+}
+
+@media (min-width: 860px) {
+	#root {
+		padding: 2rem;
+	}
+}
