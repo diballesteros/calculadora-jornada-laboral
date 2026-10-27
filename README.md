@@ -16,16 +16,33 @@ Resultados mostrados en formato decimal:
 ## Reglas
 
 - Las horas extra son todas las que excedan 8 horas.
-- Las horas nocturnas se calculan entre las 19:00 y las 06:00.
-- Los turnos no pueden cruzar a otro dia.
+- Las horas nocturnas se calculan entre las 18:00 y las 06:00.
+- Los turnos no pueden cruzar a otro dia. Un turno puede terminar a las 24:00.
 - Si `Dia Dominical` esta marcado, todo el turno cuenta como dominical o feriado.
 - Las categorias son superpuestas. Una misma hora puede ser nocturna y dominical al mismo tiempo.
+
+## Importar desde Excel
+
+Se puede cargar un archivo `.xlsx` con el formato de horas extras (columnas `FECHA`, `HORA DE ENTRADA`, `HORA DE SALIDA` y opcionalmente `CONCEPTO`). El archivo se procesa solo en el navegador.
+
+- Las horas se aceptan como `05:30am`, `03:30pm`, `00.00am`, `17:00` o celdas de hora de Excel.
+- Las filas con `/` en entrada y salida se consideran dias de descanso y se omiten.
+- Una salida a las `00:00am` significa el final del dia (24:00).
+- Los turnos con la misma fecha se suman y el limite de 8 horas se aplica al total del dia.
+- Los domingos y festivos de Colombia se marcan automaticamente y se pueden cambiar por dia.
+- Al hacer clic en un turno importado se cargan sus valores en el formulario.
 
 ## Desarrollo local
 
 ```bash
 npm install
 npm run dev
+```
+
+## Pruebas
+
+```bash
+npm test
 ```
 
 ## Build de produccion
