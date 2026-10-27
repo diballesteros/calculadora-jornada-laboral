@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from "react";
+import { ExcelImport } from "./ExcelImport";
 import { ResultsTable } from "./ResultsTable";
 import { calculateHours, formatDecimalHours } from "../utils/hours";
 
@@ -9,6 +10,16 @@ const timeOptions = Array.from({ length: 48 }, (_, index) => {
 	return `${String(hours).padStart(2, "0")}:${minutes}`;
 });
 
+// A shift may end at midnight but cannot cross it, so only Fin offers 24:00.
+const endTimeOptions = [...timeOptions.slice(1), "24:00"];
+
+// Imported shifts can use times off the 30-minute grid; keep them selectable.
+function withSelectedTime(options: string[], value: string) {
+	return !value || options.includes(value)
+		? options
+		: [...options, value].sort();
+}
+
 export function HoursCalculator() {
 	const startId = useId();
 	const endId = useId();
@@ -17,6 +28,13 @@ export function HoursCalculator() {
 	const [startTime, setStartTime] = useState("");
 	const [endTime, setEndTime] = useState("");
 	const [isSunday, setIsSunday] = useState(false);
+
+	function handleImportedShift(start: string, end: string, sunday: boolean) {
+		setStartTime(start);
+		setEndTime(end);
+		setIsSunday(sunday);
+		window.scrollTo({ top: 0, behavior: "smooth" });
+	}
 
 	const results = useMemo(() => {
 		return calculateHours(startTime, endTime, isSunday);
@@ -53,7 +71,7 @@ export function HoursCalculator() {
 								setStartTime(event.target.value)
 							}>
 							<option value="">Selecciona una hora</option>
-							{timeOptions.map((time) => (
+							{withSelectedTime(timeOptions, startTime).map((time) => (
 								<option key={time} value={time}>
 									{time}
 								</option>
@@ -70,7 +88,7 @@ export function HoursCalculator() {
 								setEndTime(event.target.value)
 							}>
 							<option value="">Selecciona una hora</option>
-							{timeOptions.map((time) => (
+							{withSelectedTime(endTimeOptions, endTime).map((time) => (
 								<option key={time} value={time}>
 									{time}
 								</option>
@@ -133,6 +151,8 @@ export function HoursCalculator() {
 					</div>
 				)}
 			</section>
+
+			<ExcelImport onUseShift={handleImportedShift} />
 		</main>
 	);
 }
