@@ -1,4 +1,4 @@
-const REGULAR_HOURS_LIMIT = 8 * 60;
+export const REGULAR_HOURS_LIMIT = 8 * 60;
 const NIGHT_RANGES = [
 	{ start: 0, end: 6 * 60 },
 	{ start: 18 * 60, end: 24 * 60 },
