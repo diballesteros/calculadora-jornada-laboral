@@ -1,7 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import {
-	addHighlightStyles,
 	applyCorrections,
 	calculateRowHours,
 	columnLetter,
@@ -53,8 +52,8 @@ describe("findCorrections", () => {
 		];
 
 		expect(findCorrections(data, daysFor(data, ["2026-10-04"]))).toEqual([
-			{ row: 6, column: 5, label: "Nocturnas", previous: "5", value: 6 },
-			{ row: 6, column: 6, label: "Dominicales", previous: "", value: 7 },
+			{ row: 6, column: 5, date: "2026-10-04", label: "Nocturnas", previous: "5", value: 6 },
+			{ row: 6, column: 6, date: "2026-10-04", label: "Dominicales", previous: "", value: 7 },
 		]);
 	});
 
@@ -78,50 +77,51 @@ describe("columnLetter", () => {
 
 describe("writeCells", () => {
 	const sheet = (rows: string) =>
-		`<worksheet><dimension ref="A1:G3"/><sheetData>${rows}</sheetData><mergeCells count="0"/></worksheet>`;
+		`<worksheet><dimension ref="A1:G4"/><sheetData>${rows}</sheetData><mergeCells count="0"/></worksheet>`;
 
-	it("overwrites text and formula cells, inserts missing cells and rows in order", () => {
+	it("overwrites text and formula cells keeping their style", () => {
 		const { xml, removedFormula } = writeCells(
 			sheet(
 				'<row r="1" spans="1:7"><c r="A1" s="2" t="s"><v>0</v></c><c r="E1" s="3" t="s"><v>4</v></c><c r="G1" s="3"/></row>' +
-					'<row r="3"><c r="D3" s="3"><f>B3-C3</f><v>1</v></c></row>',
+					'<row r="3"><c r="D3" s="5"><f>B3-C3</f><v>1</v></c></row>',
 			),
 			[
 				{ row: 1, column: 4, value: 2 },
-				{ row: 1, column: 5, value: 0.5 },
-				{ row: 2, column: 3, value: 8 },
+				{ row: 1, column: 6, value: 0.5 },
 				{ row: 3, column: 3, value: 9 },
 			],
-			(current) => current + 10,
 		);
 
 		expect(xml).toBe(
 			sheet(
-				'<row r="1" spans="1:7"><c r="A1" s="2" t="s"><v>0</v></c><c r="E1" s="13"><v>2</v></c><c r="F1" s="10"><v>0.5</v></c><c r="G1" s="3"/></row>' +
-					'<row r="2"><c r="D2" s="10"><v>8</v></c></row>' +
-					'<row r="3"><c r="D3" s="13"><v>9</v></c></row>',
+				'<row r="1" spans="1:7"><c r="A1" s="2" t="s"><v>0</v></c><c r="E1" s="3"><v>2</v></c><c r="G1" s="3"><v>0.5</v></c></row>' +
+					'<row r="3"><c r="D3" s="5"><v>9</v></c></row>',
 			),
 		);
 		expect(removedFormula).toBe(true);
 	});
-});
 
-describe("addHighlightStyles", () => {
-	it("adds one fill and a highlighted copy of each style", () => {
-		const { xml, styleMap } = addHighlightStyles(
-			'<styleSheet><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-				'<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf></cellXfs></styleSheet>',
-			[1, 0, 1],
+	it("creates missing cells and rows in order, styled like the cell above", () => {
+		const { xml } = writeCells(
+			sheet(
+				'<row r="1"><c r="A1" s="2"/><c r="E1" s="3"/></row>' +
+					'<row r="4"><c r="A4" s="2"/></row>',
+			),
+			[
+				{ row: 1, column: 5, value: 1 },
+				{ row: 2, column: 4, value: 8 },
+				{ row: 4, column: 4, value: 3 },
+				{ row: 5, column: 0, value: 7 },
+			],
 		);
 
-		expect(styleMap).toEqual(new Map([[1, 2], [0, 3]]));
-		expect(xml).toContain('<fills count="3">');
-		expect(xml).toContain('<cellXfs count="4">');
-		expect(xml).toContain(
-			'<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1" applyFill="1"><alignment horizontal="center"/></xf>',
-		);
-		expect(xml).toContain(
-			'<xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/></cellXfs>',
+		expect(xml).toBe(
+			sheet(
+				'<row r="1"><c r="A1" s="2"/><c r="E1" s="3"/><c r="F1"><v>1</v></c></row>' +
+					'<row r="2"><c r="E2" s="3"><v>8</v></c></row>' +
+					'<row r="4"><c r="A4" s="2"/><c r="E4" s="3"><v>3</v></c></row>' +
+					'<row r="5"><c r="A5" s="2"><v>7</v></c></row>',
+			),
 		);
 	});
 });
@@ -136,9 +136,7 @@ describe("applyCorrections", () => {
 			"xl/_rels/workbook.xml.rels": strToU8(
 				'<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>',
 			),
-			"xl/styles.xml": strToU8(
-				'<styleSheet><fills count="1"><fill/></fills><cellXfs count="1"><xf fillId="0"/></cellXfs></styleSheet>',
-			),
+			"xl/styles.xml": strToU8("<styleSheet/>"),
 			"xl/worksheets/sheet1.xml": strToU8('<worksheet><sheetData><row r="1"/></sheetData></worksheet>'),
 			"xl/worksheets/sheet2.xml": strToU8('<worksheet><sheetData><row r="1"/></sheetData></worksheet>'),
 			"xl/media/image1.jpeg": new Uint8Array([1, 2, 3]),
@@ -146,16 +144,17 @@ describe("applyCorrections", () => {
 
 		const files = unzipSync(
 			applyCorrections(workbook, "OTRA", [
-				{ row: 1, column: 1, label: "Extras", previous: "", value: 3 },
+				{ row: 1, column: 1, date: "2026-10-01", label: "Extras", previous: "", value: 3 },
 			]),
 		);
 
 		expect(strFromU8(files["xl/worksheets/sheet2.xml"])).toBe(
-			'<worksheet><sheetData><row r="1"><c r="B1" s="1"><v>3</v></c></row></sheetData></worksheet>',
+			'<worksheet><sheetData><row r="1"><c r="B1"><v>3</v></c></row></sheetData></worksheet>',
 		);
 		expect(strFromU8(files["xl/worksheets/sheet1.xml"])).toBe(
 			'<worksheet><sheetData><row r="1"/></sheetData></worksheet>',
 		);
+		expect(strFromU8(files["xl/styles.xml"])).toBe("<styleSheet/>");
 		expect(files["xl/media/image1.jpeg"]).toEqual(new Uint8Array([1, 2, 3]));
 	});
 });

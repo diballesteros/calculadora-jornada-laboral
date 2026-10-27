@@ -13,6 +13,7 @@ import {
 export type CellCorrection = {
 	row: number; // 1-based Excel row
 	column: number; // 0-based column index
+	date: string;
 	label: string;
 	previous: string;
 	value: number;
@@ -26,10 +27,6 @@ const RESULT_COLUMNS = [
 ] as const;
 
 type ResultKey = (typeof RESULT_COLUMNS)[number][0];
-
-// Light yellow, the same as Excel's "Neutral" cell style.
-const HIGHLIGHT_FILL =
-	'<fill><patternFill patternType="solid"><fgColor rgb="FFFFEB9C"/><bgColor indexed="64"/></patternFill></fill>';
 
 const toHours = (minutes: number) => Math.round((minutes / 60) * 100) / 100;
 
@@ -94,6 +91,9 @@ export function findCorrections(
 	}
 
 	const corrections: CellCorrection[] = [];
+	const dates = new Map(
+		days.flatMap((day) => day.shifts.map((shift) => [shift.row, day.date])),
+	);
 
 	for (const [row, values] of calculateRowHours(days)) {
 		for (const [key, label] of RESULT_COLUMNS) {
@@ -111,6 +111,7 @@ export function findCorrections(
 				corrections.push({
 					row,
 					column,
+					date: dates.get(row)!,
 					label,
 					previous: String(raw ?? "").trim(),
 					value,
@@ -140,15 +141,6 @@ function getAttribute(attributes: string, name: string) {
 	return attributes.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1];
 }
 
-function setAttribute(attributes: string, name: string, value: string) {
-	const pattern = new RegExp(`\\s${name}="[^"]*"`);
-	const attribute = ` ${name}="${value}"`;
-
-	return pattern.test(attributes)
-		? attributes.replace(pattern, attribute)
-		: attributes + attribute;
-}
-
 function decodeXml(text: string) {
 	return text
 		.replace(/&lt;/g, "<")
@@ -158,62 +150,19 @@ function decodeXml(text: string) {
 		.replace(/&amp;/g, "&");
 }
 
-// Adds a highlight fill plus a highlighted copy of each cell style used by the
-// corrected cells. Returns the new styles.xml and the old → new style index.
-export function addHighlightStyles(
-	stylesXml: string,
-	styleIndexes: number[],
-): { xml: string; styleMap: Map<number, number> } {
-	const fills = stylesXml.match(/<fills\b([^>]*)>([\s\S]*?)<\/fills>/);
-	const cellXfs = stylesXml.match(/<cellXfs\b([^>]*)>([\s\S]*?)<\/cellXfs>/);
-
-	if (!fills || !cellXfs) {
-		throw new Error("styles.xml has no fills or cellXfs");
-	}
-
-	const fillCount = fills[2].match(/<fill\b/g)?.length ?? 0;
-	const xfs = cellXfs[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) ?? [];
-	const styleMap = new Map<number, number>();
-	const added: string[] = [];
-
-	for (const index of new Set(styleIndexes)) {
-		const xf = xfs[index] ?? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>';
-		const tagEnd = xf.search(/\/?>/);
-		const attributes = setAttribute(
-			setAttribute(xf.slice(3, tagEnd), "fillId", String(fillCount)),
-			"applyFill",
-			"1",
-		);
-
-		styleMap.set(index, xfs.length + added.length);
-		added.push(`<xf${attributes}${xf.slice(tagEnd)}`);
-	}
-
-	const xml = stylesXml
-		.replace(
-			fills[0],
-			`<fills${setAttribute(fills[1], "count", String(fillCount + 1))}>${fills[2]}${HIGHLIGHT_FILL}</fills>`,
-		)
-		.replace(
-			cellXfs[0],
-			`<cellXfs${setAttribute(cellXfs[1], "count", String(xfs.length + added.length))}>${cellXfs[2]}${added.join("")}</cellXfs>`,
-		);
-
-	return { xml, styleMap };
-}
-
 const ROW_PATTERN = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g;
 const CELL_PATTERN = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
 
-// Writes numeric values into a worksheet's XML, creating cells and rows when
-// needed. `style` returns the style index to give each cell, from its current
-// one. Returns the new XML and whether a formula was overwritten.
+// Writes numeric values into a worksheet's XML, keeping each cell's style.
+// Missing cells are created with the style of the nearest cell above in the
+// same column, so they match the table's borders and fonts. Returns the new
+// XML and whether a formula was overwritten.
 export function writeCells(
 	sheetXml: string,
 	cells: { row: number; column: number; value: number }[],
-	style: (current: number) => number,
 ): { xml: string; removedFormula: boolean } {
 	const byRow = new Map<number, Map<number, number>>();
+	const columnStyles = new Map<number, string>();
 	let removedFormula = false;
 
 	for (const { row, column, value } of cells) {
@@ -244,18 +193,17 @@ export function writeCells(
 			pending.delete(column);
 			removedFormula ||= cellContent.includes("<f");
 
-			const current = Number(getAttribute(cellAttributes, "s") ?? 0);
-			const kept = cellAttributes.replace(/\s(?:t|s)="[^"]*"/g, "");
 			existing.push({
 				column,
-				xml: `<c${setAttribute(kept, "s", String(style(current)))}><v>${value}</v></c>`,
+				xml: `<c${cellAttributes.replace(/\st="[^"]*"/, "")}><v>${value}</v></c>`,
 			});
 		}
 
 		for (const [column, value] of pending) {
+			const style = columnStyles.get(column);
 			existing.push({
 				column,
-				xml: `<c r="${columnLetter(column)}${rowNumber}" s="${style(0)}"><v>${value}</v></c>`,
+				xml: `<c r="${columnLetter(column)}${rowNumber}"${style ? ` s="${style}"` : ""}><v>${value}</v></c>`,
 			});
 		}
 
@@ -278,13 +226,27 @@ export function writeCells(
 			throw new Error("Row without reference");
 		}
 
+		// Rows to write that don't exist yet, before this one.
+		for (const missing of [...byRow.keys()].filter((r) => r < row).sort((a, b) => a - b)) {
+			rows.push({ row: missing, xml: writeRow(missing, ` r="${missing}"`, "") });
+		}
+
+		for (const [, cellAttributes] of content.matchAll(CELL_PATTERN)) {
+			const ref = getAttribute(cellAttributes, "r");
+			const style = getAttribute(cellAttributes, "s");
+
+			if (ref && style) {
+				columnStyles.set(columnIndex(ref.replace(/\d+$/, "")), style);
+			}
+		}
+
 		rows.push({
 			row,
 			xml: byRow.has(row) ? writeRow(row, attributes, content) : xml,
 		});
 	}
 
-	for (const row of [...byRow.keys()]) {
+	for (const row of [...byRow.keys()].sort((a, b) => a - b)) {
 		rows.push({ row, xml: writeRow(row, ` r="${row}"`, "") });
 	}
 
@@ -348,36 +310,8 @@ export function applyCorrections(
 ): Uint8Array {
 	const files = unzipSync(workbook);
 	const sheetPath = resolveSheetPath(files, sheetName);
-	const sheetXml = strFromU8(files[sheetPath]);
 
-	const styleIndexes = [0];
-	for (const [, attributes] of sheetXml.matchAll(CELL_PATTERN)) {
-		const ref = getAttribute(attributes, "r");
-		const match = ref?.match(/^([A-Z]+)(\d+)$/);
-
-		if (
-			match &&
-			corrections.some(
-				(cell) =>
-					cell.row === Number(match[2]) &&
-					cell.column === columnIndex(match[1]),
-			)
-		) {
-			styleIndexes.push(Number(getAttribute(attributes, "s") ?? 0));
-		}
-	}
-
-	const styles = addHighlightStyles(
-		strFromU8(files["xl/styles.xml"]),
-		styleIndexes,
-	);
-	const sheet = writeCells(
-		sheetXml,
-		corrections,
-		(current) => styles.styleMap.get(current)!,
-	);
-
-	files["xl/styles.xml"] = strToU8(styles.xml);
+	const sheet = writeCells(strFromU8(files[sheetPath]), corrections);
 	files[sheetPath] = strToU8(sheet.xml);
 
 	if (sheet.removedFormula) {

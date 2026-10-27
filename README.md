@@ -34,7 +34,7 @@ Se puede cargar un archivo `.xlsx` con el formato de horas extras (columnas `FEC
 
 ### Descargar el Excel corregido
 
-Despues de importar, la app compara las columnas `HORAS LABORADAS`, `EXTRAS A REPORTAR`, `NOCTURNAS` y `DOMINICALES` de cada fila con el calculo y lista las celdas que no coinciden. El boton "Descargar Excel corregido" genera una copia del mismo archivo con esas celdas corregidas y resaltadas en amarillo; el resto del archivo (formato, imagenes, otras hojas) no cambia.
+Despues de importar, la app compara las columnas `HORAS LABORADAS`, `EXTRAS A REPORTAR`, `NOCTURNAS` y `DOMINICALES` de cada fila con el calculo y lista por fecha los valores que no coinciden. Cada correccion tiene una casilla, marcada por defecto; al descargar se genera una copia del mismo archivo con solo las correcciones marcadas aplicadas. Las celdas conservan su formato original y el resto del archivo (imagenes, otras hojas) no cambia.
 
 - Cuando un dia tiene varios turnos, las 8 horas laborales se asignan a los primeros turnos del dia y las extras a los siguientes.
 - Las celdas vacias que deberian ser 0 se dejan vacias.
