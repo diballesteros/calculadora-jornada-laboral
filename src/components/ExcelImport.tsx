@@ -9,6 +9,7 @@ import {
 	applyCorrections,
 	columnLetter,
 	findCorrections,
+	type CellCorrection,
 } from "../utils/excelExport";
 import { isSundayOrHoliday } from "../utils/holidays";
 import { formatDecimalHours } from "../utils/hours";
@@ -43,6 +44,22 @@ function formatDate(dateKey: string) {
 	return dateFormatter.format(new Date(`${dateKey}T00:00:00Z`));
 }
 
+function cellKey(cell: CellCorrection) {
+	return `${cell.row}-${cell.column}`;
+}
+
+function toggleInSet(current: Set<string>, value: string) {
+	const next = new Set(current);
+
+	if (next.has(value)) {
+		next.delete(value);
+	} else {
+		next.add(value);
+	}
+
+	return next;
+}
+
 export function ExcelImport({ onUseShift }: ExcelImportProps) {
 	const fileId = useId();
 	const sheetId = useId();
@@ -53,6 +70,8 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 	const [sheetIndex, setSheetIndex] = useState(0);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [downloadError, setDownloadError] = useState<string | null>(null);
+	// Corrections (by cell) the user chose not to apply; all apply by default.
+	const [skippedCells, setSkippedCells] = useState<Set<string>>(new Set());
 	// Dates whose automatic Sunday/holiday flag the user has flipped.
 	const [toggledDates, setToggledDates] = useState<Set<string>>(new Set());
 
@@ -80,6 +99,10 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 		[sheet, days],
 	);
 
+	const selectedCorrections = corrections.filter(
+		(cell) => !skippedCells.has(cellKey(cell)),
+	);
+
 	async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.[0];
 
@@ -93,6 +116,7 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 		setSheets([]);
 		setSheetIndex(0);
 		setToggledDates(new Set());
+		setSkippedCells(new Set());
 		setLoadError(null);
 
 		try {
@@ -131,7 +155,7 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 			const workbook = applyCorrections(
 				new Uint8Array(await file.arrayBuffer()),
 				sheet.name,
-				corrections,
+				selectedCorrections,
 			);
 			const url = URL.createObjectURL(
 				new Blob([workbook as BlobPart], {
@@ -150,18 +174,12 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 		}
 	}
 
+	function toggleCorrection(key: string) {
+		setSkippedCells((current) => toggleInSet(current, key));
+	}
+
 	function toggleDate(date: string) {
-		setToggledDates((current) => {
-			const next = new Set(current);
-
-			if (next.has(date)) {
-				next.delete(date);
-			} else {
-				next.add(date);
-			}
-
-			return next;
-		});
+		setToggledDates((current) => toggleInSet(current, date));
 	}
 
 	return (
@@ -194,6 +212,7 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 						onChange={(event) => {
 							setSheetIndex(Number(event.target.value));
 							setToggledDates(new Set());
+							setSkippedCells(new Set());
 						}}>
 						{sheets.map((option, index) => (
 							<option key={option.name} value={index}>
@@ -303,30 +322,43 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 					<div className="export-panel">
 						<p className="status-message">
 							{corrections.length
-								? `${corrections.length} celdas de la hoja no coinciden con el calculo. Al descargar se corrigen y quedan resaltadas en amarillo.`
+								? `${corrections.length} valores de la hoja no coinciden con el calculo. Marca las correcciones que quieres aplicar al descargar.`
 								: "Los valores de la hoja ya coinciden con el calculo."}
 						</p>
 
 						{corrections.length ? (
-							<details className="corrections">
-								<summary>Ver correcciones</summary>
-								<ul>
-									{corrections.map((cell) => (
-										<li key={`${cell.row}-${cell.column}`}>
-											{columnLetter(cell.column)}
-											{cell.row} ({cell.label}): {cell.previous || "vacio"}{" "}
-											→ {formatDecimalHours(cell.value * 60)}
+							<ul className="corrections">
+								{corrections.map((cell) => {
+									const key = cellKey(cell);
+
+									return (
+										<li key={key}>
+											<label
+												title={`Celda ${columnLetter(cell.column)}${cell.row}`}>
+												<input
+													type="checkbox"
+													checked={!skippedCells.has(key)}
+													onChange={() => toggleCorrection(key)}
+												/>
+												<span>
+													<strong>{formatDate(cell.date)}</strong> ·{" "}
+													{cell.label}: {cell.previous || "vacio"} →{" "}
+													{formatDecimalHours(cell.value * 60)}
+												</span>
+											</label>
 										</li>
-									))}
-								</ul>
-							</details>
+									);
+								})}
+							</ul>
 						) : null}
 
 						<button
 							type="button"
 							className="download-button"
 							onClick={handleDownload}>
-							Descargar Excel corregido
+							{selectedCorrections.length
+								? `Descargar Excel con ${selectedCorrections.length} correcciones`
+								: "Descargar Excel sin cambios"}
 						</button>
 
 						{downloadError ? (
