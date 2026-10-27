@@ -250,6 +250,44 @@
 	margin-bottom: 1rem;
 }
 
+.export-panel {
+	margin-top: 1.25rem;
+}
+
+.corrections {
+	margin-bottom: 1rem;
+}
+
+.corrections summary {
+	font-weight: 700;
+	color: var(--text-h);
+	cursor: pointer;
+}
+
+.corrections ul {
+	margin: 0.5rem 0 0;
+	padding-left: 1.25rem;
+	font-size: 0.9rem;
+}
+
+.download-button {
+	border: none;
+	border-radius: 999px;
+	padding: 0.75rem 1.25rem;
+	font: inherit;
+	font-weight: 700;
+	color: #fff;
+	background: var(--accent);
+	cursor: pointer;
+}
+
+.download-button:hover,
+.download-button:focus-visible {
+	filter: brightness(1.1);
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 @media (min-width: 860px) {
 	.app-shell {
 		gap: 2rem;

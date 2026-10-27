@@ -29,12 +29,17 @@ export type ImportedDay = {
 	error: string | null;
 };
 
-type Columns = {
+// Column indexes (0-based) of the template; -1 when a column is missing.
+export type Columns = {
 	headerRow: number;
 	date: number;
 	start: number;
 	end: number;
 	concept: number;
+	total: number;
+	overtime: number;
+	night: number;
+	sunday: number;
 };
 
 const DAY_OFF_MARKERS = ["", "/", "-"];
@@ -129,8 +134,18 @@ export function parseSheetDate(value: unknown): string | null {
 	return null;
 }
 
-function findColumns(data: unknown[][]): Columns | null {
-	const columns = { headerRow: -1, date: -1, start: -1, end: -1, concept: -1 };
+export function findColumns(data: unknown[][]): Columns | null {
+	const columns = {
+		headerRow: -1,
+		date: -1,
+		start: -1,
+		end: -1,
+		concept: -1,
+		total: -1,
+		overtime: -1,
+		night: -1,
+		sunday: -1,
+	};
 
 	// Headers can span two rows ("HORARIO PROGRAMADO" above ENTRADA/SALIDA).
 	for (let rowIndex = 0; rowIndex < Math.min(data.length, 20); rowIndex++) {
@@ -147,6 +162,10 @@ function findColumns(data: unknown[][]): Columns | null {
 			else if (text.includes("ENTRADA")) found("start");
 			else if (text.includes("SALIDA")) found("end");
 			else if (text === "CONCEPTO") found("concept");
+			else if (text.includes("LABORADA")) found("total");
+			else if (text.startsWith("EXTRA")) found("overtime");
+			else if (text.startsWith("NOCTURNA")) found("night");
+			else if (text.startsWith("DOMINICAL")) found("sunday");
 		});
 	}
 

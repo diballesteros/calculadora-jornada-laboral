@@ -5,11 +5,17 @@ import {
 	type ImportIssue,
 	type ImportedShift,
 } from "../utils/excelImport";
+import {
+	applyCorrections,
+	columnLetter,
+	findCorrections,
+} from "../utils/excelExport";
 import { isSundayOrHoliday } from "../utils/holidays";
 import { formatDecimalHours } from "../utils/hours";
 
 type ParsedSheet = {
 	name: string;
+	data: unknown[][];
 	shifts: ImportedShift[];
 	issues: ImportIssue[];
 };
@@ -41,10 +47,12 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 	const fileId = useId();
 	const sheetId = useId();
 
+	const [file, setFile] = useState<File | null>(null);
 	const [fileName, setFileName] = useState("");
 	const [sheets, setSheets] = useState<ParsedSheet[]>([]);
 	const [sheetIndex, setSheetIndex] = useState(0);
 	const [loadError, setLoadError] = useState<string | null>(null);
+	const [downloadError, setDownloadError] = useState<string | null>(null);
 	// Dates whose automatic Sunday/holiday flag the user has flipped.
 	const [toggledDates, setToggledDates] = useState<Set<string>>(new Set());
 
@@ -67,6 +75,11 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 		);
 	}, [days]);
 
+	const corrections = useMemo(
+		() => (sheet ? findCorrections(sheet.data, days) : []),
+		[sheet, days],
+	);
+
 	async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.[0];
 
@@ -74,7 +87,9 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 			return;
 		}
 
+		setFile(file);
 		setFileName(file.name);
+		setDownloadError(null);
 		setSheets([]);
 		setSheetIndex(0);
 		setToggledDates(new Set());
@@ -87,7 +102,7 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 			const parsed = (await readXlsxFile(file)).flatMap(({ sheet, data }) => {
 				const result = parseShiftSheet(data as unknown[][]);
 				return result && (result.shifts.length || result.issues.length)
-					? [{ name: sheet, ...result }]
+					? [{ name: sheet, data: data as unknown[][], ...result }]
 					: [];
 			});
 
@@ -101,6 +116,36 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 		} catch {
 			setLoadError(
 				"No se pudo leer el archivo. Verifica que sea un Excel (.xlsx) valido.",
+			);
+		}
+	}
+
+	async function handleDownload() {
+		if (!file || !sheet) {
+			return;
+		}
+
+		setDownloadError(null);
+
+		try {
+			const workbook = applyCorrections(
+				new Uint8Array(await file.arrayBuffer()),
+				sheet.name,
+				corrections,
+			);
+			const url = URL.createObjectURL(
+				new Blob([workbook as BlobPart], {
+					type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				}),
+			);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = fileName.replace(/(\.xlsx)?$/i, " (corregido).xlsx");
+			link.click();
+			URL.revokeObjectURL(url);
+		} catch {
+			setDownloadError(
+				"No se pudo generar el Excel corregido: el archivo tiene un formato que no se puede editar.",
 			);
 		}
 	}
@@ -253,6 +298,40 @@ export function ExcelImport({ onUseShift }: ExcelImportProps) {
 								</tr>
 							</tfoot>
 						</table>
+					</div>
+
+					<div className="export-panel">
+						<p className="status-message">
+							{corrections.length
+								? `${corrections.length} celdas de la hoja no coinciden con el calculo. Al descargar se corrigen y quedan resaltadas en amarillo.`
+								: "Los valores de la hoja ya coinciden con el calculo."}
+						</p>
+
+						{corrections.length ? (
+							<details className="corrections">
+								<summary>Ver correcciones</summary>
+								<ul>
+									{corrections.map((cell) => (
+										<li key={`${cell.row}-${cell.column}`}>
+											{columnLetter(cell.column)}
+											{cell.row} ({cell.label}): {cell.previous || "vacio"}{" "}
+											→ {formatDecimalHours(cell.value * 60)}
+										</li>
+									))}
+								</ul>
+							</details>
+						) : null}
+
+						<button
+							type="button"
+							className="download-button"
+							onClick={handleDownload}>
+							Descargar Excel corregido
+						</button>
+
+						{downloadError ? (
+							<p className="status-message is-error">{downloadError}</p>
+						) : null}
 					</div>
 				</>
 			) : null}
